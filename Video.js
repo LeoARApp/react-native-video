@@ -6,6 +6,7 @@ import TextTrackType from './TextTrackType';
 import FilterType from './FilterType';
 import DRMType from './DRMType';
 import VideoResizeMode from './VideoResizeMode.js';
+import { validLUTFilterNames } from './LUTFilterNames';
 
 const styles = StyleSheet.create({
   base: {
@@ -351,6 +352,7 @@ export default class Video extends Component {
 }
 
 Video.propTypes = {
+  filterRawResourceName: PropTypes.string,
   filter: PropTypes.oneOf([
     FilterType.NONE,
     FilterType.INVERT,
@@ -476,6 +478,8 @@ Video.propTypes = {
   fullscreenAutorotate: PropTypes.bool,
   fullscreenOrientation: PropTypes.oneOf(['all', 'landscape', 'portrait']),
   progressUpdateInterval: PropTypes.number,
+  lutFilter: PropTypes.oneOf([...validLUTFilterNames, '', null]),
+  rotationAngle: PropTypes.number,
   useTextureView: PropTypes.bool,
   hideShutterView: PropTypes.bool,
   onLoadStart: PropTypes.func,
