@@ -898,7 +898,7 @@ static int const RCTVideoUnset = -1;
     [_player pause];
     [_player setRate:0.0];
   } else {
-    if([_ignoreSilentSwitch isEqualToString:@"ignore"]) {
+    if ([_ignoreSilentSwitch isEqualToString:@"ignore"]) {
       [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
     } else if([_ignoreSilentSwitch isEqualToString:@"obey"]) {
       [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:nil];
@@ -906,7 +906,7 @@ static int const RCTVideoUnset = -1;
     [_player play];
     [_player setRate:_rate];
   }
-  
+
   _paused = paused;
 }
 
@@ -970,6 +970,15 @@ static int const RCTVideoUnset = -1;
 - (void)setRate:(float)rate
 {
   _rate = rate;
+
+  // Fix video sometimes freezes when adjusting speed
+  dispatch_async(dispatch_get_main_queue(), ^(void){
+    AVPlayerItem *item = _player.currentItem;
+    [_player replaceCurrentItemWithPlayerItem:nil];
+    [_player replaceCurrentItemWithPlayerItem:item];
+    _player.rate = rate;
+  });
+
   [self applyModifiers];
 }
 
