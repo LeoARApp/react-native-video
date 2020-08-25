@@ -100,7 +100,7 @@ class ReactExoplayerView extends FrameLayout implements
     private PlayerControlView playerControlView;
     private View playPauseControlContainer;
     private Player.EventListener eventListener;
-    
+
     private Handler mainHandler;
     private ExoPlayerView exoPlayerView;
 
@@ -134,7 +134,7 @@ class ReactExoplayerView extends FrameLayout implements
     private String audioTrackType;
     private Dynamic audioTrackValue;
     private String videoTrackType;
-    private Dynamic videoTrackValue;    
+    private Dynamic videoTrackValue;
     private ReadableArray audioTracks;
     private String textTrackType;
     private Dynamic textTrackValue;
@@ -179,12 +179,20 @@ class ReactExoplayerView extends FrameLayout implements
         this.eventEmitter = new VideoEventEmitter(context);
 
         createViews();
-        
+
         audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         themedReactContext.addLifecycleEventListener(this);
         audioBecomingNoisyReceiver = new AudioBecomingNoisyReceiver(themedReactContext);
 
-        initializePlayer();
+        Activity activity = themedReactContext.getCurrentActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    initializePlayer();
+                }
+            });
+        }
     }
 
 
@@ -202,9 +210,7 @@ class ReactExoplayerView extends FrameLayout implements
             CookieHandler.setDefault(DEFAULT_COOKIE_MANAGER);
         }
 
-        LayoutParams layoutParams = new LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.MATCH_PARENT);
+        LayoutParams layoutParams = new LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT);
         exoPlayerView = new ExoPlayerView(getContext());
         exoPlayerView.setLayoutParams(layoutParams);
 
@@ -214,7 +220,15 @@ class ReactExoplayerView extends FrameLayout implements
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        initializePlayer();
+        Activity activity = themedReactContext.getCurrentActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    initializePlayer();
+                }
+            });
+        }
     }
 
     @Override
@@ -265,7 +279,7 @@ class ReactExoplayerView extends FrameLayout implements
     // Internal methods
 
     /**
-     * Toggling the visibility of the player control view 
+     * Toggling the visibility of the player control view
      */
     private void togglePlayerControlVisibility() {
         if(player == null) return;
@@ -340,62 +354,55 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     private void initializePlayer() {
-        ReactExoplayerView self = this;
-        // This ensures all props have been setted, to avoid async racing conditions.
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (player == null) {
-                    TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory(BANDWIDTH_METER);
-                    trackSelector = new DefaultTrackSelector(videoTrackSelectionFactory);
-                    trackSelector.setParameters(trackSelector.buildUponParameters()
-                            .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
+        if (player == null) {
+            TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory(BANDWIDTH_METER);
+            trackSelector = new DefaultTrackSelector(videoTrackSelectionFactory);
+            trackSelector.setParameters(trackSelector.buildUponParameters()
+                    .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
 
-                    DefaultAllocator allocator = new DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE);
-                    DefaultLoadControl defaultLoadControl = new DefaultLoadControl(allocator, minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs, -1, true);
-                    player = ExoPlayerFactory.newSimpleInstance(getContext(), trackSelector, defaultLoadControl);
-                    player.addListener(self);
-                    player.setMetadataOutput(self);
-                    exoPlayerView.setPlayer(player);
-                    audioBecomingNoisyReceiver.setListener(self);
-                    BANDWIDTH_METER.addEventListener(new Handler(), self);
-                    setPlayWhenReady(!isPaused);
-                    playerNeedsSource = true;
+            DefaultAllocator allocator = new DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE);
+            DefaultLoadControl defaultLoadControl = new DefaultLoadControl(allocator, minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs, -1, true);
+            player = ExoPlayerFactory.newSimpleInstance(getContext(), trackSelector, defaultLoadControl);
+            player.addListener(this);
+            player.setMetadataOutput(this);
+            exoPlayerView.setPlayer(player);
+            audioBecomingNoisyReceiver.setListener(this);
+            BANDWIDTH_METER.addEventListener(new Handler(), this);
+            setPlayWhenReady(!isPaused);
+            playerNeedsSource = true;
 
-                    PlaybackParameters params = new PlaybackParameters(rate, 1f);
-                    player.setPlaybackParameters(params);
-                }
-                if (playerNeedsSource && srcUri != null) {
-                    ArrayList<MediaSource> mediaSourceList = buildTextSources();
-                    MediaSource videoSource = buildMediaSource(srcUri, extension);
-                    MediaSource mediaSource;
-                    if (mediaSourceList.size() == 0) {
-                        mediaSource = videoSource;
-                    } else {
-                        mediaSourceList.add(0, videoSource);
-                        MediaSource[] textSourceArray = mediaSourceList.toArray(
-                                new MediaSource[mediaSourceList.size()]
-                        );
-                        mediaSource = new MergingMediaSource(textSourceArray);
-                    }
-
-                    boolean haveResumePosition = resumeWindow != C.INDEX_UNSET;
-                    if (haveResumePosition) {
-                        player.seekTo(resumeWindow, resumePosition);
-                    }
-                    player.prepare(mediaSource, !haveResumePosition, false);
-                    playerNeedsSource = false;
-
-                    eventEmitter.loadStart();
-                    loadVideoStarted = true;
-                }
-
-                // Initializing the playerControlView
-                initializePlayerControl();
-                setControls(controls);
-                applyModifiers();
+            PlaybackParameters params = new PlaybackParameters(rate, 1f);
+            player.setPlaybackParameters(params);
+        }
+        if (playerNeedsSource && srcUri != null) {
+            ArrayList<MediaSource> mediaSourceList = buildTextSources();
+            MediaSource videoSource = buildMediaSource(srcUri, extension);
+            MediaSource mediaSource;
+            if (mediaSourceList.size() == 0) {
+                mediaSource = videoSource;
+            } else {
+                mediaSourceList.add(0, videoSource);
+                MediaSource[] textSourceArray = mediaSourceList.toArray(
+                        new MediaSource[mediaSourceList.size()]
+                );
+                mediaSource = new MergingMediaSource(textSourceArray);
             }
-        }, 1);
+
+            boolean haveResumePosition = resumeWindow != C.INDEX_UNSET;
+            if (haveResumePosition) {
+                player.seekTo(resumeWindow, resumePosition);
+            }
+            player.prepare(mediaSource, !haveResumePosition, false);
+            playerNeedsSource = false;
+
+            eventEmitter.loadStart();
+            loadVideoStarted = true;
+        }
+
+        // Initializing the playerControlView
+        initializePlayerControl();
+        setControls(controls);
+        applyModifiers();
     }
 
     private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
@@ -404,16 +411,16 @@ class ReactExoplayerView extends FrameLayout implements
         switch (type) {
             case C.TYPE_SS:
                 return new SsMediaSource(uri, buildDataSourceFactory(false),
-                        new DefaultSsChunkSource.Factory(mediaDataSourceFactory), 
-                        minLoadRetryCount, SsMediaSource.DEFAULT_LIVE_PRESENTATION_DELAY_MS, 
+                        new DefaultSsChunkSource.Factory(mediaDataSourceFactory),
+                        minLoadRetryCount, SsMediaSource.DEFAULT_LIVE_PRESENTATION_DELAY_MS,
                         mainHandler, null);
             case C.TYPE_DASH:
                 return new DashMediaSource(uri, buildDataSourceFactory(false),
-                        new DefaultDashChunkSource.Factory(mediaDataSourceFactory), 
+                        new DefaultDashChunkSource.Factory(mediaDataSourceFactory),
                         minLoadRetryCount, DashMediaSource.DEFAULT_LIVE_PRESENTATION_DELAY_MS,
                         mainHandler, null);
             case C.TYPE_HLS:
-                return new HlsMediaSource(uri, mediaDataSourceFactory, 
+                return new HlsMediaSource(uri, mediaDataSourceFactory,
                         minLoadRetryCount, mainHandler, null);
             case C.TYPE_OTHER:
                 return new ExtractorMediaSource(uri, mediaDataSourceFactory, new DefaultExtractorsFactory(),
@@ -494,7 +501,15 @@ class ReactExoplayerView extends FrameLayout implements
             switch (player.getPlaybackState()) {
                 case ExoPlayer.STATE_IDLE:
                 case ExoPlayer.STATE_ENDED:
-                    initializePlayer();
+                    Activity activity = themedReactContext.getCurrentActivity();
+                    if (activity != null) {
+                        activity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                initializePlayer();
+                            }
+                        });
+                    }
                     break;
                 case ExoPlayer.STATE_BUFFERING:
                 case ExoPlayer.STATE_READY:
@@ -507,7 +522,15 @@ class ReactExoplayerView extends FrameLayout implements
             }
 
         } else {
-            initializePlayer();
+            Activity activity = themedReactContext.getCurrentActivity();
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        initializePlayer();
+                    }
+                });
+            }
         }
         if (!disableFocus) {
             setKeepScreenOn(true);
@@ -820,7 +843,15 @@ class ReactExoplayerView extends FrameLayout implements
         playerNeedsSource = true;
         if (isBehindLiveWindow(e)) {
             clearResumePosition();
-            initializePlayer();
+            Activity activity = themedReactContext.getCurrentActivity();
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        initializePlayer();
+                    }
+                });
+            }
         } else {
             updateResumePosition();
         }
@@ -857,6 +888,14 @@ class ReactExoplayerView extends FrameLayout implements
 
     // ReactExoplayerViewManager public api
 
+    public void enableFilter(boolean filterEnabled) {
+        exoPlayerView.enableFilter(filterEnabled);
+    }
+
+    public void setFilterPath(final String path) {
+        exoPlayerView.setFilterPath(path);
+    }
+
     public void setSrc(final Uri uri, final String extension, Map<String, String> headers) {
         if (uri != null) {
             boolean isOriginalSourceNull = srcUri == null;
@@ -879,7 +918,7 @@ class ReactExoplayerView extends FrameLayout implements
 
     public void setReportBandwidth(boolean reportBandwidth) {
         mReportBandwidth = reportBandwidth;
-    }   
+    }
 
     public void setRawSrc(final Uri uri, final String extension) {
         if (uri != null) {
@@ -903,7 +942,15 @@ class ReactExoplayerView extends FrameLayout implements
 
     private void reloadSource() {
         playerNeedsSource = true;
-        initializePlayer();
+        Activity activity = themedReactContext.getCurrentActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    initializePlayer();
+                }
+            });
+        }
     }
 
     public void setResizeModeModifier(@ResizeMode.Mode int resizeMode) {
@@ -1004,7 +1051,7 @@ class ReactExoplayerView extends FrameLayout implements
             for (int j = 0; j < group.length; j++) {
                 tracks[j] = j;
             }
-        } 
+        }
 
         if (groupIndex == C.INDEX_UNSET) {
             trackSelector.setParameters(disableParameters);
@@ -1110,7 +1157,15 @@ class ReactExoplayerView extends FrameLayout implements
     public void setMinLoadRetryCountModifier(int newMinLoadRetryCount) {
         minLoadRetryCount = newMinLoadRetryCount;
         releasePlayer();
-        initializePlayer();
+        Activity activity = themedReactContext.getCurrentActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    initializePlayer();
+                }
+            });
+        }
     }
 
     public void setPlayInBackground(boolean playInBackground) {
@@ -1154,10 +1209,6 @@ class ReactExoplayerView extends FrameLayout implements
         }
     }
 
-    public void setUseTextureView(boolean useTextureView) {
-        exoPlayerView.setUseTextureView(useTextureView);
-    }
-
     public void setHideShutterView(boolean hideShutterView) {
         exoPlayerView.setHideShutterView(hideShutterView);
     }
@@ -1168,12 +1219,20 @@ class ReactExoplayerView extends FrameLayout implements
         bufferForPlaybackMs = newBufferForPlaybackMs;
         bufferForPlaybackAfterRebufferMs = newBufferForPlaybackAfterRebufferMs;
         releasePlayer();
-        initializePlayer();
+        Activity activity = themedReactContext.getCurrentActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    initializePlayer();
+                }
+            });
+        }
     }
 
     /**
      * Handling controls prop
-     * 
+     *
      * @param controls  Controls prop, if true enable controls, if false disable them
      */
     public void setControls(boolean controls) {
