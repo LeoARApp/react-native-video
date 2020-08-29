@@ -327,7 +327,7 @@ export default class Video extends Component {
 }
 
 Video.propTypes = {
-  filterPath: PropTypes.string,
+  filterRawResourceName: PropTypes.string,
   filter: PropTypes.oneOf([
       FilterType.NONE,
       FilterType.INVERT,
