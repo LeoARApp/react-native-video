@@ -71,7 +71,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String PROP_HIDE_SHUTTER_VIEW = "hideShutterView";
     private static final String PROP_CONTROLS = "controls";
     private static final String PROP_FILTER_ENABLED = "filterEnabled";
-    private static final String PROP_FILTER_PATH = "filterPath";
+    private static final String PROP_FILTER_RAW_RESOURCE_NAME = "filterRawResourceName";
 
     private ReactExoplayerConfig config;
 
@@ -320,9 +320,9 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
         videoView.enableFilter(filterEnabled);
     }
 
-    @ReactProp(name = PROP_FILTER_PATH)
-    public void setFilterPath(final ReactExoplayerView videoView, final String path) {
-        videoView.setFilterPath(path);
+    @ReactProp(name = PROP_FILTER_RAW_RESOURCE_NAME)
+    public void setFilterRawResourceName(final ReactExoplayerView videoView, final String name) {
+        videoView.setFilterRawResourceName(name);
     }
 
     @ReactProp(name = PROP_BUFFER_CONFIG)

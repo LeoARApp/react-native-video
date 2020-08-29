@@ -1003,8 +1003,8 @@ class ReactExoplayerView extends FrameLayout implements
         exoPlayerView.enableFilter(filterEnabled);
     }
 
-    public void setFilterPath(final String path) {
-        exoPlayerView.setFilterPath(path);
+    public void setFilterRawResourceName(final String name) {
+        exoPlayerView.setFilterRawResourceName(name);
     }
 
     public void setSrc(final Uri uri, final String extension, Map<String, String> headers) {

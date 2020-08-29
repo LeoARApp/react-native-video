@@ -2,15 +2,17 @@ package com.brentvatne.exoplayer;
 
 import android.annotation.TargetApi;
 import android.content.Context;
-import androidx.core.content.ContextCompat;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+
+import androidx.core.content.ContextCompat;
+
 import com.daasuu.epf.EPlayerView;
 import com.daasuu.epf.filter.GlFilter;
 import com.google.android.exoplayer2.C;
@@ -25,7 +27,7 @@ import com.google.android.exoplayer2.text.TextRenderer;
 import com.google.android.exoplayer2.text.TextOutput;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.ui.SubtitleView;
-import java.io.File;
+
 import java.util.List;
 
 @TargetApi(16)
@@ -131,15 +133,17 @@ public final class ExoPlayerView extends FrameLayout {
     * generate a bitmap for apply filter to EPlayerView
     * @param path of lookup filter
     * */
-    public void setFilterPath(final String path) {
-        File file = new File(path);
+    public void setFilterRawResourceName(final String name) {
+        int resourceId = context.getResources().getIdentifier(name, "raw", context.getPackageName());
+        Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), resourceId);
         GlFilter filter;
-        if (file.exists()) {
-            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+
+        if (bitmap != null) {
             filter = new GlLut512Filter(bitmap);
-        }else {
+        } else {
             filter = new GlFilter();
         }
+
         this.filter = filter;
         applyFilter();
     }
