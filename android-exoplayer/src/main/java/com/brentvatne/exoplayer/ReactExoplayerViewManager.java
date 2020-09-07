@@ -61,6 +61,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String PROP_CONTROLS = "controls";
     private static final String PROP_FILTER_ENABLED = "filterEnabled";
     private static final String PROP_FILTER_RAW_RESOURCE_NAME = "filterRawResourceName";
+    private static final String PROP_ROTATION_ANGLE = "rotationAngle";
 
     @Override
     public String getName() {
@@ -277,6 +278,11 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     @ReactProp(name = PROP_FILTER_RAW_RESOURCE_NAME)
     public void setFilterRawResourceName(final ReactExoplayerView videoView, final String name) {
         videoView.setFilterRawResourceName(name);
+    }
+
+    @ReactProp(name = PROP_ROTATION_ANGLE)
+    public void setRotationAngle(final ReactExoplayerView videoView, final int angle) {
+        videoView.setRotationAngle(angle);
     }
 
     @ReactProp(name = PROP_BUFFER_CONFIG)
