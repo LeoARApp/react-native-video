@@ -4,6 +4,8 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.TextureView;
@@ -13,7 +15,7 @@ import android.widget.FrameLayout;
 
 import androidx.core.content.ContextCompat;
 
-import com.daasuu.epf.EPlayerView;
+import com.daasuu.epf.CustomEPlayerView;
 import com.daasuu.epf.filter.GlFilter;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -40,7 +42,8 @@ public final class ExoPlayerView extends FrameLayout {
     private final AspectRatioFrameLayout layout;
     private final ComponentListener componentListener;
     private SimpleExoPlayer player;
-    private GlFilter filter;
+    private boolean filterEnabled = false;
+    private int angle = 0;
 
     public ExoPlayerView(Context context) {
         this(context, null);
@@ -107,31 +110,53 @@ public final class ExoPlayerView extends FrameLayout {
         }
     }
 
+    public void setRotationAngle(final int angle) {
+        int calculatedAngle = Utils.calculateAngle(angle);
+        if (this.angle != calculatedAngle) {
+            this.angle = calculatedAngle;
+            bind();
+        }
+    }
+
+    /**
+     * @param filterEnabled attach OpenGL or TextureView
+     */
+    public void enableFilter(boolean filterEnabled) {
+        if (this.filterEnabled != filterEnabled) {
+            this.filterEnabled = filterEnabled;
+            bind();
+        }
+    }
+
     private void setVideoView() {
         if (surfaceView instanceof TextureView) {
+            if (angle == 90 || angle == -90) {
+                (surfaceView).post(rotate);
+                layout.setAspectRatio((float) 16/9);
+            }
             player.setVideoTextureView((TextureView) surfaceView);
-        }else if (surfaceView instanceof EPlayerView) {
-            ((EPlayerView) surfaceView).setSimpleExoPlayer(player);
+        }else if (surfaceView instanceof CustomEPlayerView) {
+            if (angle == 90 || angle == -90) {
+                layout.setAspectRatio(1f);
+            }
+            ((CustomEPlayerView) surfaceView).setup(this.angle);
+            ((CustomEPlayerView) surfaceView).setSimpleExoPlayer(player);
         }
     }
 
-    public void enableFilter(boolean filterEnabled) {
-        if (filterEnabled && player != null) {
-            layout.removeViewAt(0);
-            surfaceView = null;
-            surfaceView = new EPlayerView(context);
-            ((EPlayerView)surfaceView).setSimpleExoPlayer(player);
-            surfaceView.setLayoutParams(layoutParams);
-            layout.addView(surfaceView, 0, layoutParams);
-            ((EPlayerView) surfaceView).onResume();
-            applyFilter();
-        }
+    private void bind() {
+        layout.removeViewAt(0);
+        surfaceView = null;
+        surfaceView = filterEnabled ? new CustomEPlayerView(context) : new TextureView(context);
+        surfaceView.setLayoutParams(layoutParams);
+        layout.addView(surfaceView, 0, layoutParams);
+        setVideoView();
     }
 
-    /*
-    * generate a bitmap for apply filter to EPlayerView
-    * @param path of lookup filter
-    * */
+    /**
+     * generate a bitmap for apply filter to CustomEPlayerView
+     * @param name is rawSrc of lookup filter
+     */
     public void setFilterRawResourceName(final String name) {
         int resourceId = context.getResources().getIdentifier(name, "raw", context.getPackageName());
         Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), resourceId);
@@ -143,19 +168,17 @@ public final class ExoPlayerView extends FrameLayout {
             filter = new GlFilter();
         }
 
-        this.filter = filter;
-        applyFilter();
+        if (!(surfaceView instanceof CustomEPlayerView)) {
+            return;
+        }
+
+        ((CustomEPlayerView) surfaceView).setGlFilter(new GlFilter()); // reset filter before attach to new
+        ((CustomEPlayerView) surfaceView).setGlFilter(filter);
     }
 
-    private void applyFilter() {
-        if (surfaceView instanceof EPlayerView && this.filter != null) {
-            ((EPlayerView) surfaceView).setGlFilter(this.filter);
-        }
-    }
 
     /**
      * Sets the resize mode which can be of value {@link ResizeMode.Mode}
-     *
      * @param resizeMode The resize mode.
      */
     public void setResizeMode(@ResizeMode.Mode int resizeMode) {
@@ -163,21 +186,32 @@ public final class ExoPlayerView extends FrameLayout {
             layout.setResizeMode(resizeMode);
             post(measureAndLayout);
         }
-
     }
 
     public void setHideShutterView(boolean hideShutterView) {
         shutterView.setVisibility(hideShutterView ? View.INVISIBLE : View.VISIBLE);
     }
 
-    private final Runnable measureAndLayout = new Runnable() {
-        @Override
-        public void run() {
-            measure(
-                    MeasureSpec.makeMeasureSpec(getWidth(), MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.EXACTLY));
-            layout(getLeft(), getTop(), getRight(), getBottom());
-        }
+    private final Runnable measureAndLayout = () -> {
+        measure(MeasureSpec.makeMeasureSpec(getWidth(), MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.EXACTLY));
+        layout(getLeft(), getTop(), getRight(), getBottom());
+    };
+
+    private final Runnable rotate = () -> {
+        int width = surfaceView.getWidth();
+        int height = surfaceView.getHeight();
+        float pivotX = (float) width / 2;
+        float pivotY = (float) height / 2;
+        Matrix matrix = new Matrix();
+        matrix.postRotate(angle, pivotX, pivotY);
+
+        RectF originalTextureRect = new RectF(0, 0, width, height);
+        RectF rotatedTextureRect = new RectF();
+        matrix.mapRect(rotatedTextureRect, originalTextureRect);
+        matrix.postScale(width / rotatedTextureRect.width(), height / rotatedTextureRect.height(), pivotX, pivotY);
+
+        ((TextureView) surfaceView).setTransform(matrix);
     };
 
     private void updateForCurrentTrackSelections() {
@@ -196,8 +230,10 @@ public final class ExoPlayerView extends FrameLayout {
         shutterView.setVisibility(VISIBLE);
     }
 
-    private final class ComponentListener implements SimpleExoPlayer.VideoListener,
-            TextRenderer.Output, ExoPlayer.EventListener {
+    private final class ComponentListener implements
+            SimpleExoPlayer.VideoListener,
+            TextRenderer.Output,
+            ExoPlayer.EventListener {
 
         // TextRenderer.Output implementation
 
@@ -210,12 +246,13 @@ public final class ExoPlayerView extends FrameLayout {
 
         @Override
         public void onVideoSizeChanged(int width, int height, int unappliedRotationDegrees, float pixelWidthHeightRatio) {
-            boolean isInitialRatio = layout.getAspectRatio() == 0;
-            layout.setAspectRatio(height == 0 ? 1 : (width * pixelWidthHeightRatio) / height);
-
-            // React native workaround for measuring and layout on initial load.
-            if (isInitialRatio) {
-                post(measureAndLayout);
+            if (angle == 0) {
+                boolean isInitialRatio = layout.getAspectRatio() == 0;
+                layout.setAspectRatio(height == 0 ? 1 : (width * pixelWidthHeightRatio) / height);
+                // React native workaround for measuring and layout on initial load.
+                if (isInitialRatio) {
+                    post(measureAndLayout);
+                }
             }
         }
 
@@ -227,53 +264,33 @@ public final class ExoPlayerView extends FrameLayout {
         // ExoPlayer.EventListener implementation
 
         @Override
-        public void onLoadingChanged(boolean isLoading) {
-            // Do nothing.
-        }
+        public void onLoadingChanged(boolean isLoading) { }
 
         @Override
-        public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
-            // Do nothing.
-        }
+        public void onPlayerStateChanged(boolean playWhenReady, int playbackState) { }
 
         @Override
-        public void onPlayerError(ExoPlaybackException e) {
-            // Do nothing.
-        }
+        public void onPlayerError(ExoPlaybackException e) { }
 
         @Override
-        public void onPositionDiscontinuity(int reason) {
-            // Do nothing.
-        }
+        public void onPositionDiscontinuity(int reason) { }
 
         @Override
-        public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
-            // Do nothing.
-        }
+        public void onTimelineChanged(Timeline timeline, Object manifest, int reason) { }
 
         @Override
-        public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
-            updateForCurrentTrackSelections();
-        }
+        public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) { updateForCurrentTrackSelections(); }
 
         @Override
-        public void onPlaybackParametersChanged(PlaybackParameters params) {
-            // Do nothing
-        }
+        public void onPlaybackParametersChanged(PlaybackParameters params) { }
 
         @Override
-        public void onSeekProcessed() {
-            // Do nothing.
-        }
+        public void onSeekProcessed() { }
 
         @Override
-        public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
-            // Do nothing.
-        }
+        public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) { }
 
         @Override
-        public void onRepeatModeChanged(int repeatMode) {
-            // Do nothing.
-        }
+        public void onRepeatModeChanged(int repeatMode) { }
     }
 }
