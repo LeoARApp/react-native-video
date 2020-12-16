@@ -3,15 +3,9 @@ package com.daasuu.epf;
 import android.graphics.SurfaceTexture;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
-import android.util.Log;
 import android.view.Surface;
 
-import com.brentvatne.exoplayer.Utils;
 import com.daasuu.epf.CustomEPlayerView;
-import com.daasuu.epf.EFrameBufferObjectRenderer;
-import com.daasuu.epf.EFramebufferObject;
-import com.daasuu.epf.ESurfaceTexture;
-import com.daasuu.epf.EglUtil;
 import com.daasuu.epf.filter.GlFilter;
 import com.daasuu.epf.filter.GlLookUpTableFilter;
 import com.daasuu.epf.filter.GlPreviewFilter;
@@ -160,21 +154,11 @@ public class CustomEPlayerRenderer extends EFrameBufferObjectRenderer implements
         Matrix.multiplyMM(MVPMatrix, 0, ProjMatrix, 0, MVPMatrix, 0);
 
         if (angle != 0) {
-            boolean landscape = angle == 90 || angle == -90;
-            float[] scale = Utils.getScaleAspectFit(
-                    angle,
-                    fbo.getWidth(),
-                    fbo.getHeight(),
-                    landscape ? fbo.getHeight() : fbo.getWidth(),
-                    landscape ? fbo.getWidth() : fbo.getHeight()
-            );
-            Matrix.scaleM(MVPMatrix, 0, scale[0], scale[1], 1);
             Matrix.rotateM(MVPMatrix, 0, -angle, 0.f, 0.f, 1.f);
             previewFilter.draw(texName, MVPMatrix, STMatrix, (float) 9 / 16);
         } else {
             previewFilter.draw(texName, MVPMatrix, STMatrix, aspectRatio);
         }
-
 
         if (glFilter != null) {
             fbo.enable();

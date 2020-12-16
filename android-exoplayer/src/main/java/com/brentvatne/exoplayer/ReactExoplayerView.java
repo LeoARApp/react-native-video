@@ -156,7 +156,7 @@ class ReactExoplayerView extends FrameLayout implements
                     if (player != null
                             && player.getPlaybackState() == ExoPlayer.STATE_READY
                             && player.getPlayWhenReady()
-                            ) {
+                    ) {
                         long pos = player.getCurrentPosition();
                         long bufferedDuration = player.getBufferedPercentage() * player.getDuration() / 100;
                         eventEmitter.progressChanged(pos, bufferedDuration, player.getDuration());
@@ -182,12 +182,7 @@ class ReactExoplayerView extends FrameLayout implements
 
         Activity activity = themedReactContext.getCurrentActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    initializePlayer();
-                }
-            });
+            activity.runOnUiThread(this::initializePlayer);
         }
     }
 
@@ -218,12 +213,7 @@ class ReactExoplayerView extends FrameLayout implements
         super.onAttachedToWindow();
         Activity activity = themedReactContext.getCurrentActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    initializePlayer();
-                }
-            });
+            activity.runOnUiThread(this::initializePlayer);
         }
     }
 
@@ -301,12 +291,7 @@ class ReactExoplayerView extends FrameLayout implements
         playPauseControlContainer = playerControlView.findViewById(R.id.exo_play_pause_container);
 
         // Invoking onClick event for exoplayerView
-        exoPlayerView.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                togglePlayerControlVisibility();
-            }
-        });
+        exoPlayerView.setOnClickListener(v -> togglePlayerControlVisibility());
 
         // Invoking onPlayerStateChanged event for Player
         eventListener = new Player.EventListener() {
@@ -499,12 +484,7 @@ class ReactExoplayerView extends FrameLayout implements
                 case ExoPlayer.STATE_ENDED:
                     Activity activity = themedReactContext.getCurrentActivity();
                     if (activity != null) {
-                        activity.runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                initializePlayer();
-                            }
-                        });
+                        activity.runOnUiThread(this::initializePlayer);
                     }
                     break;
                 case ExoPlayer.STATE_BUFFERING:
@@ -520,12 +500,7 @@ class ReactExoplayerView extends FrameLayout implements
         } else {
             Activity activity = themedReactContext.getCurrentActivity();
             if (activity != null) {
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        initializePlayer();
-                    }
-                });
+                activity.runOnUiThread(this::initializePlayer);
             }
         }
         if (!disableFocus) {
@@ -688,7 +663,7 @@ class ReactExoplayerView extends FrameLayout implements
             audioTrack.putString("type", format.sampleMimeType);
             audioTrack.putString("language", format.language != null ? format.language : "");
             audioTrack.putString("bitrate", format.bitrate == Format.NO_VALUE ? ""
-                                    : String.format(Locale.US, "%.2fMbps", format.bitrate / 1000000f));
+                    : String.format(Locale.US, "%.2fMbps", format.bitrate / 1000000f));
             audioTracks.pushMap(audioTrack);
         }
         return audioTracks;
@@ -732,13 +707,13 @@ class ReactExoplayerView extends FrameLayout implements
 
         TrackGroupArray groups = info.getTrackGroups(index);
         for (int i = 0; i < groups.length; ++i) {
-             Format format = groups.get(i).getFormat(0);
-             WritableMap textTrack = Arguments.createMap();
-             textTrack.putInt("index", i);
-             textTrack.putString("title", format.id != null ? format.id : "");
-             textTrack.putString("type", format.sampleMimeType);
-             textTrack.putString("language", format.language != null ? format.language : "");
-             textTracks.pushMap(textTrack);
+            Format format = groups.get(i).getFormat(0);
+            WritableMap textTrack = Arguments.createMap();
+            textTrack.putInt("index", i);
+            textTrack.putString("title", format.id != null ? format.id : "");
+            textTrack.putString("type", format.sampleMimeType);
+            textTrack.putString("language", format.language != null ? format.language : "");
+            textTracks.pushMap(textTrack);
         }
         return textTracks;
     }
@@ -841,12 +816,7 @@ class ReactExoplayerView extends FrameLayout implements
             clearResumePosition();
             Activity activity = themedReactContext.getCurrentActivity();
             if (activity != null) {
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        initializePlayer();
-                    }
-                });
+                activity.runOnUiThread(this::initializePlayer);
             }
         } else {
             updateResumePosition();
@@ -944,12 +914,7 @@ class ReactExoplayerView extends FrameLayout implements
         playerNeedsSource = true;
         Activity activity = themedReactContext.getCurrentActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    initializePlayer();
-                }
-            });
+            activity.runOnUiThread(this::initializePlayer);
         }
     }
 
@@ -1138,12 +1103,12 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     public void setRateModifier(float newRate) {
-      rate = newRate;
+        rate = newRate;
 
-      if (player != null) {
-          PlaybackParameters params = new PlaybackParameters(rate, 1f);
-          player.setPlaybackParameters(params);
-      }
+        if (player != null) {
+            PlaybackParameters params = new PlaybackParameters(rate, 1f);
+            player.setPlaybackParameters(params);
+        }
     }
 
     public void setMaxBitRateModifier(int newMaxBitRate) {
@@ -1159,12 +1124,7 @@ class ReactExoplayerView extends FrameLayout implements
         releasePlayer();
         Activity activity = themedReactContext.getCurrentActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    initializePlayer();
-                }
-            });
+            activity.runOnUiThread(this::initializePlayer);
         }
     }
 
@@ -1221,12 +1181,7 @@ class ReactExoplayerView extends FrameLayout implements
         releasePlayer();
         Activity activity = themedReactContext.getCurrentActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    initializePlayer();
-                }
-            });
+            activity.runOnUiThread(this::initializePlayer);
         }
     }
 
