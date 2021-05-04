@@ -56,7 +56,7 @@ static int const RCTVideoUnset = -1;
   id _timeObserver;
 
   /* Name of the Core Image filter to apply to video playback */
-  NSString *_ciFilter;
+  NSString *_lutFilter;
 
   /* Rotation angle for affine transform */
   float _rotationAngle;
@@ -380,7 +380,7 @@ static int const RCTVideoUnset = -1;
       _playerItem = playerItem;
       [self setPreferredForwardBufferDuration:_preferredForwardBufferDuration];
       [self addPlayerItemObservers];
-      [self setCIFilterVideoComposition];
+      [self setLutFilterVideoComposition];
       [self setFilter:self->_filterName];
       [self setMaxBitRate:self->_maxBitRate];
       
@@ -853,22 +853,117 @@ static int const RCTVideoUnset = -1;
 
 #pragma mark - Core Image Filters
 
-- (void)setCIFilterVideoComposition
+- (CIFilter *)createLutFilter {
+  UIImage *image = [UIImage imageNamed:_lutFilter];
+  if (!image) {
+    return NULL;
+  }
+
+  NSInteger dimension = 64;
+  NSInteger width = CGImageGetWidth(image.CGImage);
+  NSInteger height = CGImageGetHeight(image.CGImage);
+  NSInteger rowNum = height / dimension;
+  NSInteger columnNum = width / dimension;
+
+  if ((width % dimension != 0) || (height % dimension != 0) || (rowNum * columnNum != dimension)) {
+    return NULL;
+  }
+
+  CGContextRef context = NULL;
+  CGColorSpaceRef colorSpace;
+  unsigned char *bitmap;
+  NSInteger bitmapSize;
+  NSInteger bytesPerRow;
+
+  bytesPerRow = (width * 4);
+  bitmapSize = (bytesPerRow * height);
+
+  bitmap = malloc(bitmapSize);
+  if (!bitmap) {
+    return NULL;
+  }
+
+  colorSpace = CGColorSpaceCreateDeviceRGB();
+  if (!colorSpace) {
+    free(bitmap);
+    return NULL;
+  }
+
+  context = CGBitmapContextCreate(
+              bitmap,
+              width,
+              height,
+              8,
+              bytesPerRow,
+              colorSpace,
+              kCGImageAlphaPremultipliedLast);
+  CGColorSpaceRelease(colorSpace);
+
+  if (!context) {
+    free(bitmap);
+    return NULL;
+  }
+
+  CGContextDrawImage(context, CGRectMake(0, 0, width, height), image.CGImage);
+  CGContextRelease(context);
+
+  if (!bitmap) {
+    return NULL;
+  }
+
+  NSInteger size = dimension * dimension * dimension * sizeof(float) * 4;
+  float *data = malloc(size);
+  int bitmapOffset = 0;
+  int z = 0;
+  for (int row = 0; row < rowNum; ++row) {
+    for (int y = 0; y < dimension; ++y) {
+      int tmp = z;
+      for (int col = 0; col < columnNum; ++col) {
+        for (int x = 0; x < dimension; ++x) {
+          float r = (unsigned int) bitmap[bitmapOffset];
+          float g = (unsigned int) bitmap[bitmapOffset + 1];
+          float b = (unsigned int) bitmap[bitmapOffset + 2];
+          float a = (unsigned int) bitmap[bitmapOffset + 3];
+
+          NSInteger dataOffset = ((z * dimension * dimension) + (y * dimension) + x) * 4;
+          data[dataOffset] = r / 255.0;
+          data[dataOffset + 1] = g / 255.0;
+          data[dataOffset + 2] = b / 255.0;
+          data[dataOffset + 3] = a / 255.0;
+          bitmapOffset += 4;
+        }
+        ++z;
+      }
+      z = tmp;
+    }
+    z += columnNum;
+  }
+
+  free(bitmap);
+
+  CIFilter *filter = [CIFilter filterWithName:@"CIColorCube"];
+  [filter setValue:[NSData dataWithBytesNoCopy:data length:size freeWhenDone:YES] forKey:@"inputCubeData"];
+  [filter setValue:[NSNumber numberWithInteger:dimension] forKey:@"inputCubeDimension"];
+
+  return filter;
+}
+
+- (void)setLutFilterVideoComposition
 {
-  if (!_playerItem || !_playerItem.asset || !_ciFilter || [[_source objectForKey:@"uri"] rangeOfString:@"m3u8"].location != NSNotFound) {
+  if (!_playerItem || !_playerItem.asset || !_lutFilter || [[_source objectForKey:@"uri"] rangeOfString:@"m3u8"].location != NSNotFound) {
     return;
   }
 
-  CIFilter *filter = [CIFilter filterWithName:_ciFilter];
+  CIFilter *filter = [self createLutFilter];
   _playerItem.videoComposition = [AVVideoComposition videoCompositionWithAsset:_playerItem.asset
-                                                  applyingCIFiltersWithHandler:^(AVAsynchronousCIImageFilteringRequest *request) {
-                                                    if (filter) {
-                                                      [filter setValue:request.sourceImage forKey:kCIInputImageKey];
-                                                      [request finishWithImage:filter.outputImage context:nil];
-                                                    } else {
-                                                      [request finishWithImage:request.sourceImage context:nil];
-                                                    }
-                                                  }];
+                                                applyingCIFiltersWithHandler:^(AVAsynchronousCIImageFilteringRequest *request) {
+                                                  if (filter) {
+                                                    [filter setValue:request.sourceImage forKey:kCIInputImageKey];
+                                                    [request finishWithImage:filter.outputImage context:nil];
+                                                  } else {
+                                                    [request finishWithImage:request.sourceImage context:nil];
+                                                  }
+                                                }];
 }
 
 #pragma mark - Prop setters
@@ -1507,10 +1602,10 @@ static int const RCTVideoUnset = -1;
   }
 }
 
-- (void)setCiFilter:(NSString *)ciFilter
+- (void)setLutFilter:(NSString *)lutFilter
 {
-  _ciFilter = ciFilter;
-  [self setCIFilterVideoComposition];
+  _lutFilter = lutFilter;
+  [self setLutFilterVideoComposition];
 }
 
 - (void)setRotationAngle:(float)rotationAngle

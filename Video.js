@@ -6,7 +6,7 @@ import TextTrackType from './TextTrackType';
 import FilterType from './FilterType';
 import DRMType from './DRMType';
 import VideoResizeMode from './VideoResizeMode.js';
-import { validCIFilterNames } from './CIFilterNames';
+import { validLUTFilterNames } from './LUTFilterNames';
 
 const styles = StyleSheet.create({
   base: {
@@ -478,7 +478,7 @@ Video.propTypes = {
   fullscreenAutorotate: PropTypes.bool,
   fullscreenOrientation: PropTypes.oneOf(['all', 'landscape', 'portrait']),
   progressUpdateInterval: PropTypes.number,
-  ciFilter: PropTypes.oneOf([...validCIFilterNames, '', null]),
+  lutFilter: PropTypes.oneOf([...validLUTFilterNames, '', null]),
   rotationAngle: PropTypes.number,
   useTextureView: PropTypes.bool,
   hideShutterView: PropTypes.bool,
