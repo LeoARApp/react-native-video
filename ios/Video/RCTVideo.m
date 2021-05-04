@@ -999,7 +999,7 @@ static int const RCTVideoUnset = -1;
     }
     [_player setRate:_rate];
   }
-  
+
   _paused = paused;
 }
 
@@ -1062,6 +1062,15 @@ static int const RCTVideoUnset = -1;
 - (void)setRate:(float)rate
 {
   _rate = rate;
+
+  // Fix video sometimes freezes when adjusting speed
+  dispatch_async(dispatch_get_main_queue(), ^(void){
+    AVPlayerItem *item = _player.currentItem;
+    [_player replaceCurrentItemWithPlayerItem:nil];
+    [_player replaceCurrentItemWithPlayerItem:item];
+    _player.rate = rate;
+  });
+
   [self applyModifiers];
 }
 
