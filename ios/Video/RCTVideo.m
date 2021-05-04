@@ -54,7 +54,10 @@ static int const RCTVideoUnset = -1;
   Float64 _progressUpdateInterval;
   BOOL _controls;
   id _timeObserver;
-  
+
+  /* Name of the Core Image filter to apply to video playback */
+  NSString *_ciFilter;
+
   /* Keep track of any modifiers, need to be applied after each play */
   float _volume;
   float _rate;
@@ -368,6 +371,7 @@ static int const RCTVideoUnset = -1;
       _playerItem = playerItem;
       [self setPreferredForwardBufferDuration:_preferredForwardBufferDuration];
       [self addPlayerItemObservers];
+      [self setCIFilterVideoComposition];
       [self setFilter:self->_filterName];
       [self setMaxBitRate:self->_maxBitRate];
       
@@ -383,6 +387,7 @@ static int const RCTVideoUnset = -1;
       }
       
       self->_player = [AVPlayer playerWithPlayerItem:self->_playerItem];
+      self->_player.automaticallyWaitsToMinimizeStalling = NO;
       self->_player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
       
       [self->_player addObserver:self forKeyPath:playbackRate options:0 context:nil];
@@ -835,6 +840,26 @@ static int const RCTVideoUnset = -1;
   } else {
     [self removePlayerTimeObserver];
   }
+}
+
+#pragma mark - Core Image Filters
+
+- (void)setCIFilterVideoComposition
+{
+  if (!_playerItem || !_playerItem.asset || !_ciFilter || [[_source objectForKey:@"uri"] rangeOfString:@"m3u8"].location != NSNotFound) {
+    return;
+  }
+
+  CIFilter *filter = [CIFilter filterWithName:_ciFilter];
+  _playerItem.videoComposition = [AVVideoComposition videoCompositionWithAsset:_playerItem.asset
+                                                  applyingCIFiltersWithHandler:^(AVAsynchronousCIImageFilteringRequest *request) {
+                                                    if (filter) {
+                                                      [filter setValue:request.sourceImage forKey:kCIInputImageKey];
+                                                      [request finishWithImage:filter.outputImage context:nil];
+                                                    } else {
+                                                      [request finishWithImage:request.sourceImage context:nil];
+                                                    }
+                                                  }];
 }
 
 #pragma mark - Prop setters
@@ -1459,6 +1484,12 @@ static int const RCTVideoUnset = -1;
     [self removePlayerTimeObserver];
     [self addPlayerTimeObserver];
   }
+}
+
+- (void)setCiFilter:(NSString *)ciFilter
+{
+  _ciFilter = ciFilter;
+  [self setCIFilterVideoComposition];
 }
 
 - (void)removePlayerLayer
