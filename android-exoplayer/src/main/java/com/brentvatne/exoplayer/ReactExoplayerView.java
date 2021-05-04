@@ -1007,6 +1007,10 @@ class ReactExoplayerView extends FrameLayout implements
         exoPlayerView.setFilterRawResourceName(name);
     }
 
+    public void setRotationAngle(final int angle) {
+        exoPlayerView.setRotationAngle(angle);
+    }
+
     public void setSrc(final Uri uri, final String extension, Map<String, String> headers) {
         if (uri != null) {
             boolean isOriginalSourceNull = srcUri == null;
