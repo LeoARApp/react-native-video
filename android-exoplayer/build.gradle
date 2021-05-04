@@ -31,7 +31,7 @@ dependencies {
     implementation('com.google.android.exoplayer:exoplayer:2.11.4') {
         exclude group: 'com.android.support'
     }
-
+    implementation 'com.github.MasayukiSuda:ExoPlayerFilter:v0.2.5'
     // All support libs must use the same version
     implementation "androidx.annotation:annotation:1.1.0"
     implementation "androidx.core:core:1.1.0"

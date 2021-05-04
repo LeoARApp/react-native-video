@@ -70,6 +70,8 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String PROP_SELECTED_VIDEO_TRACK_VALUE = "value";
     private static final String PROP_HIDE_SHUTTER_VIEW = "hideShutterView";
     private static final String PROP_CONTROLS = "controls";
+    private static final String PROP_FILTER_ENABLED = "filterEnabled";
+    private static final String PROP_FILTER_PATH = "filterPath";
 
     private ReactExoplayerConfig config;
 
@@ -300,7 +302,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
     @ReactProp(name = PROP_USE_TEXTURE_VIEW, defaultBoolean = true)
     public void setUseTextureView(final ReactExoplayerView videoView, final boolean useTextureView) {
-        videoView.setUseTextureView(useTextureView);
+        //videoView.setUseTextureView(useTextureView);
     }
 
     @ReactProp(name = PROP_HIDE_SHUTTER_VIEW, defaultBoolean = false)
@@ -311,6 +313,16 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     @ReactProp(name = PROP_CONTROLS, defaultBoolean = false)
     public void setControls(final ReactExoplayerView videoView, final boolean controls) {
         videoView.setControls(controls);
+    }
+
+    @ReactProp(name = PROP_FILTER_ENABLED, defaultBoolean = false)
+    public void setFilterEnabled(final ReactExoplayerView videoView, final boolean filterEnabled) {
+        videoView.enableFilter(filterEnabled);
+    }
+
+    @ReactProp(name = PROP_FILTER_PATH)
+    public void setFilterPath(final ReactExoplayerView videoView, final String path) {
+        videoView.setFilterPath(path);
     }
 
     @ReactProp(name = PROP_BUFFER_CONFIG)

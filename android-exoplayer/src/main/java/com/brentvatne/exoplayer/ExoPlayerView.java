@@ -4,14 +4,15 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import androidx.core.content.ContextCompat;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.Gravity;
-import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import com.daasuu.epf.EPlayerView;
+import com.daasuu.epf.filter.GlFilter;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.ExoPlayer;
@@ -24,23 +25,21 @@ import com.google.android.exoplayer2.text.TextRenderer;
 import com.google.android.exoplayer2.text.TextOutput;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.ui.SubtitleView;
-
+import java.io.File;
 import java.util.List;
 
 @TargetApi(16)
 public final class ExoPlayerView extends FrameLayout {
 
+    private Context context;
+    private ViewGroup.LayoutParams layoutParams;
     private View surfaceView;
     private final View shutterView;
     private final SubtitleView subtitleLayout;
     private final AspectRatioFrameLayout layout;
     private final ComponentListener componentListener;
     private SimpleExoPlayer player;
-    private Context context;
-    private ViewGroup.LayoutParams layoutParams;
-
-    private boolean useTextureView = true;
-    private boolean hideShutterView = false;
+    private GlFilter filter;
 
     public ExoPlayerView(Context context) {
         this(context, null);
@@ -52,18 +51,11 @@ public final class ExoPlayerView extends FrameLayout {
 
     public ExoPlayerView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-
         this.context = context;
-
-        layoutParams = new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT);
-
+        layoutParams = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         componentListener = new ComponentListener();
 
-        FrameLayout.LayoutParams aspectRatioParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
+        FrameLayout.LayoutParams aspectRatioParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
         aspectRatioParams.gravity = Gravity.CENTER;
         layout = new AspectRatioFrameLayout(context);
         layout.setLayoutParams(aspectRatioParams);
@@ -77,39 +69,14 @@ public final class ExoPlayerView extends FrameLayout {
         subtitleLayout.setUserDefaultStyle();
         subtitleLayout.setUserDefaultTextSize();
 
-        updateSurfaceView();
+        surfaceView = new TextureView(context);
+        surfaceView.setLayoutParams(layoutParams);
 
+        layout.addView(surfaceView, 0, layoutParams);
         layout.addView(shutterView, 1, layoutParams);
         layout.addView(subtitleLayout, 2, layoutParams);
 
         addViewInLayout(layout, 0, aspectRatioParams);
-    }
-
-    private void setVideoView() {
-        if (surfaceView instanceof TextureView) {
-            player.setVideoTextureView((TextureView) surfaceView);
-        } else if (surfaceView instanceof SurfaceView) {
-            player.setVideoSurfaceView((SurfaceView) surfaceView);
-        }
-    }
-
-    private void updateSurfaceView() {
-        View view = useTextureView ? new TextureView(context) : new SurfaceView(context);
-        view.setLayoutParams(layoutParams);
-
-        surfaceView = view;
-        if (layout.getChildAt(0) != null) {
-            layout.removeViewAt(0);
-        }
-        layout.addView(surfaceView, 0, layoutParams);
-
-        if (this.player != null) {
-            setVideoView();
-        }
-    }
-
-    private void updateShutterViewVisibility() {
-        shutterView.setVisibility(this.hideShutterView ? View.INVISIBLE : View.VISIBLE);
     }
 
     /**
@@ -139,6 +106,50 @@ public final class ExoPlayerView extends FrameLayout {
         }
     }
 
+    private void setVideoView() {
+        if (surfaceView instanceof TextureView) {
+            player.setVideoTextureView((TextureView) surfaceView);
+        }else if (surfaceView instanceof EPlayerView) {
+            ((EPlayerView) surfaceView).setSimpleExoPlayer(player);
+        }
+    }
+
+    public void enableFilter(boolean filterEnabled) {
+        if (filterEnabled && player != null) {
+            layout.removeViewAt(0);
+            surfaceView = null;
+            surfaceView = new EPlayerView(context);
+            ((EPlayerView)surfaceView).setSimpleExoPlayer(player);
+            surfaceView.setLayoutParams(layoutParams);
+            layout.addView(surfaceView, 0, layoutParams);
+            ((EPlayerView) surfaceView).onResume();
+            applyFilter();
+        }
+    }
+
+    /*
+    * generate a bitmap for apply filter to EPlayerView
+    * @param path of lookup filter
+    * */
+    public void setFilterPath(final String path) {
+        File file = new File(path);
+        GlFilter filter;
+        if (file.exists()) {
+            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+            filter = new GlLut512Filter(bitmap);
+        }else {
+            filter = new GlFilter();
+        }
+        this.filter = filter;
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        if (surfaceView instanceof EPlayerView && this.filter != null) {
+            ((EPlayerView) surfaceView).setGlFilter(this.filter);
+        }
+    }
+
     /**
      * Sets the resize mode which can be of value {@link ResizeMode.Mode}
      *
@@ -152,26 +163,8 @@ public final class ExoPlayerView extends FrameLayout {
 
     }
 
-    /**
-     * Get the view onto which video is rendered. This is either a {@link SurfaceView} (default)
-     * or a {@link TextureView} if the {@code use_texture_view} view attribute has been set to true.
-     *
-     * @return either a {@link SurfaceView} or a {@link TextureView}.
-     */
-    public View getVideoSurfaceView() {
-        return surfaceView;
-    }
-
-    public void setUseTextureView(boolean useTextureView) {
-        if (useTextureView != this.useTextureView) {
-            this.useTextureView = useTextureView;
-            updateSurfaceView();
-        }
-    }
-
     public void setHideShutterView(boolean hideShutterView) {
-        this.hideShutterView = hideShutterView;
-        updateShutterViewVisibility();
+        shutterView.setVisibility(hideShutterView ? View.INVISIBLE : View.VISIBLE);
     }
 
     private final Runnable measureAndLayout = new Runnable() {
@@ -285,5 +278,4 @@ public final class ExoPlayerView extends FrameLayout {
             // Do nothing.
         }
     }
-
 }
