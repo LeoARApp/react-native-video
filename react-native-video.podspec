@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   s.tvos.deployment_target = "9.0"
 
   s.subspec "Video" do |ss|
-    ss.source_files  = "ios/Video/*.{h,m}"
+    ss.source_files  = "ios/Video/*.{h,m,swift}"
     s.static_framework = true
   end
 
