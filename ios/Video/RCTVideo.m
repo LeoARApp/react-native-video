@@ -54,7 +54,14 @@ static int const RCTVideoUnset = -1;
   Float64 _progressUpdateInterval;
   BOOL _controls;
   id _timeObserver;
-  
+
+  /* Name of the Core Image filter to apply to video playback */
+    NSString *_lutFilter;
+
+  /* Rotation angle for affine transform */
+    float _rotationAngle;
+
+
   /* Keep track of any modifiers, need to be applied after each play */
   float _volume;
   float _rate;
@@ -123,6 +130,7 @@ static int const RCTVideoUnset = -1;
 #if TARGET_OS_IOS
     _restoreUserInterfaceForPIPStopCompletionHandler = NULL;
 #endif
+     _rotationAngle = 0;
 #if __has_include(<react-native-video/RCTVideoCache.h>)
     _videoCache = [RCTVideoCache sharedInstance];
 #endif
@@ -278,6 +286,11 @@ static int const RCTVideoUnset = -1;
   NSDate *currentPlaybackTime = _player.currentItem.currentDate;
   const Float64 duration = CMTimeGetSeconds(playerDuration);
   const Float64 currentTimeSecs = CMTimeGetSeconds(currentTime);
+
+  if (_repeat && currentTimeSecs >= duration) {
+      [_playerItem seekToTime:kCMTimeZero];
+      [self applyModifiers];
+    }
   
   if (_repeat && currentTimeSecs >= duration) {
     [_playerItem seekToTime:kCMTimeZero];
@@ -373,6 +386,7 @@ static int const RCTVideoUnset = -1;
       _playerItem = playerItem;
       [self setPreferredForwardBufferDuration:_preferredForwardBufferDuration];
       [self addPlayerItemObservers];
+      [self setLutFilterVideoComposition];
       [self setFilter:self->_filterName];
       [self setMaxBitRate:self->_maxBitRate];
       
@@ -388,6 +402,7 @@ static int const RCTVideoUnset = -1;
       }
       
       self->_player = [AVPlayer playerWithPlayerItem:self->_playerItem];
+      self->_player.automaticallyWaitsToMinimizeStalling = NO;
       self->_player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
       
       [self->_player addObserver:self forKeyPath:playbackRate options:0 context:nil];
@@ -845,6 +860,121 @@ static int const RCTVideoUnset = -1;
   }
 }
 
+#pragma mark - Core Image Filters
+
+- (CIFilter *)createLutFilter {
+  UIImage *image = [UIImage imageNamed:_lutFilter];
+  if (!image) {
+    return NULL;
+  }
+
+  NSInteger dimension = 64;
+  NSInteger width = CGImageGetWidth(image.CGImage);
+  NSInteger height = CGImageGetHeight(image.CGImage);
+  NSInteger rowNum = height / dimension;
+  NSInteger columnNum = width / dimension;
+
+  if ((width % dimension != 0) || (height % dimension != 0) || (rowNum * columnNum != dimension)) {
+    return NULL;
+  }
+
+  CGContextRef context = NULL;
+  CGColorSpaceRef colorSpace;
+  unsigned char *bitmap;
+  NSInteger bitmapSize;
+  NSInteger bytesPerRow;
+
+  bytesPerRow = (width * 4);
+  bitmapSize = (bytesPerRow * height);
+
+  bitmap = malloc(bitmapSize);
+  if (!bitmap) {
+    return NULL;
+  }
+
+  colorSpace = CGColorSpaceCreateDeviceRGB();
+  if (!colorSpace) {
+    free(bitmap);
+    return NULL;
+  }
+
+  context = CGBitmapContextCreate(
+              bitmap,
+              width,
+              height,
+              8,
+              bytesPerRow,
+              colorSpace,
+              kCGImageAlphaPremultipliedLast);
+  CGColorSpaceRelease(colorSpace);
+
+  if (!context) {
+    free(bitmap);
+    return NULL;
+  }
+
+  CGContextDrawImage(context, CGRectMake(0, 0, width, height), image.CGImage);
+  CGContextRelease(context);
+
+  if (!bitmap) {
+    return NULL;
+  }
+
+  NSInteger size = dimension * dimension * dimension * sizeof(float) * 4;
+  float *data = malloc(size);
+  int bitmapOffset = 0;
+  int z = 0;
+  for (int row = 0; row < rowNum; ++row) {
+    for (int y = 0; y < dimension; ++y) {
+      int tmp = z;
+      for (int col = 0; col < columnNum; ++col) {
+        for (int x = 0; x < dimension; ++x) {
+          float r = (unsigned int) bitmap[bitmapOffset];
+          float g = (unsigned int) bitmap[bitmapOffset + 1];
+          float b = (unsigned int) bitmap[bitmapOffset + 2];
+          float a = (unsigned int) bitmap[bitmapOffset + 3];
+
+          NSInteger dataOffset = ((z * dimension * dimension) + (y * dimension) + x) * 4;
+          data[dataOffset] = r / 255.0;
+          data[dataOffset + 1] = g / 255.0;
+          data[dataOffset + 2] = b / 255.0;
+          data[dataOffset + 3] = a / 255.0;
+          bitmapOffset += 4;
+        }
+        ++z;
+      }
+      z = tmp;
+    }
+    z += columnNum;
+  }
+
+  free(bitmap);
+
+  CIFilter *filter = [CIFilter filterWithName:@"CIColorCube"];
+  [filter setValue:[NSData dataWithBytesNoCopy:data length:size freeWhenDone:YES] forKey:@"inputCubeData"];
+  [filter setValue:[NSNumber numberWithInteger:dimension] forKey:@"inputCubeDimension"];
+
+  return filter;
+}
+
+- (void)setLutFilterVideoComposition
+{
+  if (!_playerItem || !_playerItem.asset || !_lutFilter || [[_source objectForKey:@"uri"] rangeOfString:@"m3u8"].location != NSNotFound) {
+    return;
+  }
+
+  CIFilter *filter = [self createLutFilter];
+  _playerItem.videoComposition = [AVVideoComposition videoCompositionWithAsset:_playerItem.asset
+                                                  applyingCIFiltersWithHandler:^(AVAsynchronousCIImageFilteringRequest *request) {
+                                                    if (filter) {
+                                                      [filter setValue:request.sourceImage forKey:kCIInputImageKey];
+                                                      [request finishWithImage:filter.outputImage context:nil];
+                                                    } else {
+                                                      [request finishWithImage:request.sourceImage context:nil];
+                                                    }
+                                                  }];
+}
+
 #pragma mark - Prop setters
 
 - (void)setResizeMode:(NSString*)mode
@@ -856,6 +986,9 @@ static int const RCTVideoUnset = -1;
   else
   {
     _playerLayer.videoGravity = mode;
+    if (_rotationAngle != 0) {
+          [_playerLayer setAffineTransform:CGAffineTransformMakeRotation(_rotationAngle)];
+        }
   }
   _resizeMode = mode;
 }
@@ -1013,6 +1146,15 @@ static int const RCTVideoUnset = -1;
 - (void)setRate:(float)rate
 {
   _rate = rate;
+
+  // Fix video sometimes freezes when adjusting speed
+    dispatch_async(dispatch_get_main_queue(), ^(void){
+      AVPlayerItem *item = _player.currentItem;
+      [_player replaceCurrentItemWithPlayerItem:nil];
+      [_player replaceCurrentItemWithPlayerItem:item];
+      _player.rate = rate;
+    });
+
   [self applyModifiers];
 }
 
@@ -1483,6 +1625,21 @@ static int const RCTVideoUnset = -1;
     [self addPlayerTimeObserver];
   }
 }
+
+- (void)setLutFilter:(NSString *)lutFilter
+{
+  _lutFilter = lutFilter;
+   [self setLutFilterVideoComposition];
+}
+
+- (void)setRotationAngle:(float)rotationAngle
+{
+  _rotationAngle = rotationAngle;
+  if (_playerLayer) {
+    [_playerLayer setAffineTransform:CGAffineTransformMakeRotation(rotationAngle)];
+  }
+}
+
 
 - (void)removePlayerLayer
 {
