@@ -151,6 +151,9 @@ public final class ExoPlayerView extends FrameLayout {
         layout.removeViewAt(0);
         surfaceView = null;
         surfaceView = filterEnabled ? new CustomEPlayerView(getContext()) : new TextureView(getContext());
+        if (surfaceView instanceof CustomEPlayerView) {
+            ((CustomEPlayerView) surfaceView).setup(angle);
+        }
         surfaceView.setLayoutParams(layoutParams);
         layout.addView(surfaceView, 0, layoutParams);
         setVideoView();
@@ -172,8 +175,6 @@ public final class ExoPlayerView extends FrameLayout {
                 layoutParams.setMargins(0, -235, 0, 0);
                 surfaceView.requestLayout();
             }
-
-            ((CustomEPlayerView) surfaceView).setup(angle);
             ((CustomEPlayerView) surfaceView).setSimpleExoPlayer(player);
         }
     }
